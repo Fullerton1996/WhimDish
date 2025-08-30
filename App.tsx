@@ -27,7 +27,11 @@ const App: React.FC = () => {
       const recipeData = await generateRecipe(currentMealType, mood);
       setCurrentRecipe({ ...recipeData, id: Date.now().toString() });
     } catch (err) {
-      setError('Failed to generate a recipe. Please try again.');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred. Please try again.');
+      }
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -68,7 +72,11 @@ const App: React.FC = () => {
         // Use the old ID to maintain continuity for the saved state
         setCurrentRecipe({ ...adjustedRecipeData, id: currentRecipe.id });
     } catch (err) {
-        setError('Failed to adjust the recipe. Please try again.');
+        if (err instanceof Error) {
+          setError(`Failed to adjust recipe: ${err.message}`);
+        } else {
+          setError('An unknown error occurred while adjusting the recipe.');
+        }
         console.error(err);
     } finally {
         setIsAdjusting(false);

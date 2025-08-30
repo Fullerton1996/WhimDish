@@ -90,11 +90,9 @@ const callGemini = async (prompt: string): Promise<Omit<Recipe, 'id'>> => {
 
     return recipeData as Omit<Recipe, 'id'>;
   } catch (error) {
-    console.error("Error in callGemini:", error);
-    if (error instanceof SyntaxError) {
-        console.error("Failed to parse JSON response from API.");
-    }
-    throw new Error("Could not process request. The API may have returned an error or an invalid recipe format.");
+    console.error("Error calling Gemini or processing its response:", error);
+    // Re-throw the original error to propagate specific messages to the UI
+    throw error;
   }
 }
 
@@ -109,7 +107,7 @@ export async function generateRecipe(mealType: MealType, mood?: string): Promise
     prompt += ` The recipe must also fit the following theme, ingredients, or mood: "${mood}".`;
   }
   
-  prompt += `\n\nYour response MUST be only a JSON object that conforms to the provided schema. Do not include any other text or markdown formatting.`;
+  prompt += `\n\nCRITICAL: The entire response must be a single, valid JSON object that conforms to the provided schema. Do not include any other text, explanations, or markdown formatting like \`\`\`json.`;
   
   return callGemini(prompt);
 }
@@ -127,7 +125,7 @@ export async function adjustRecipe(recipe: Recipe, adjustment: string): Promise<
       1. Modify the recipe (name, description, ingredients, instructions) to fulfill the user's request.
       2. Recalculate the total 'calories' based on the ingredient changes.
       3. Keep 'servings' and 'mealType' the same unless explicitly requested.
-      4. Your entire response MUST be ONLY the updated recipe as a single JSON object. Do not wrap it in markdown formatting or add any introductory text or explanations.
+      4. CRITICAL: The entire response must be a single, valid JSON object that conforms to the schema. Do not include any other text, explanations, or markdown formatting like \`\`\`json.
   `;
   
   return callGemini(prompt);
