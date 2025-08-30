@@ -106,7 +106,10 @@ const App: React.FC = () => {
     }
 
     if (error) {
-        if (error instanceof MissingApiKeyError) {
+        // Check for the API key error message coming from the serverless function
+        const isApiKeyError = error.message.includes("API_KEY is not configured");
+
+        if (isApiKeyError) {
             return (
                 <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-red-50 rounded-lg max-w-lg mx-auto shadow-sm">
                     <h2 className="text-2xl font-bold text-red-700 mb-2">Configuration Error</h2>

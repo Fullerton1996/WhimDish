@@ -1,8 +1,8 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { Recipe, MealType } from '../types';
 
-// Custom error for missing API key, allowing for specific UI handling.
+// This error class is kept for type consistency in App.tsx, but it will no longer be thrown from this service.
+// The proxy will return a generic error if the API key is missing on the server.
 export class MissingApiKeyError extends Error {
   constructor(message: string) {
     super(message);
@@ -10,99 +10,38 @@ export class MissingApiKeyError extends Error {
   }
 }
 
-// Lazily initialize the AI client to avoid crashing on module load if API key is missing
-let ai: GoogleGenAI;
-function getAiClient() {
-    if (!ai) {
-        const apiKey = process.env.API_KEY;
-        if (!apiKey) {
-            // This error will be caught by the calling function and displayed in the UI
-            throw new MissingApiKeyError("API_KEY is not configured in the environment.");
-        }
-        ai = new GoogleGenAI({ apiKey });
-    }
-    return ai;
-}
-
-const recipeSchema = {
-  type: Type.OBJECT,
-  properties: {
-    recipeName: {
-      type: Type.STRING,
-      description: "The name of the recipe."
-    },
-    description: {
-      type: Type.STRING,
-      description: "A short, gentle, and encouraging description of the dish, highlighting its health benefits."
-    },
-    calories: {
-      type: Type.INTEGER,
-      description: "Estimated total calories for the entire recipe."
-    },
-    servings: {
-      type: Type.INTEGER,
-      description: "The number of people this recipe serves."
-    },
-    mealType: {
-        type: Type.STRING,
-        description: "The category of the meal. Must be one of: 'breakfast', 'lunch', or 'dinner'."
-    },
-    ingredients: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          name: { type: Type.STRING, description: "The name of the ingredient."},
-          quantity: { type: Type.NUMBER, description: "The numeric quantity of the ingredient."},
-          unit: { type: Type.STRING, description: "The unit of measurement (e.g., 'g', 'ml', 'cup', 'tbsp')."}
-        },
-        required: ["name", "quantity", "unit"]
-      }
-    },
-    instructions: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.STRING,
-        description: "A single step in the cooking instructions."
-      }
-    }
-  },
-  required: ["recipeName", "description", "calories", "servings", "mealType", "ingredients", "instructions"]
-};
-
-const callGemini = async (prompt: string): Promise<Omit<Recipe, 'id'>> => {
+const callApiProxy = async (prompt: string): Promise<Omit<Recipe, 'id'>> => {
   try {
-    const client = getAiClient();
-    const response = await client.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: recipeSchema,
-        temperature: 0.9,
-        thinkingConfig: { thinkingBudget: 0 },
+    // Requests are now sent to our secure Netlify function
+    const response = await fetch('/.netlify/functions/gemini', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ prompt }),
     });
 
-    const jsonText = response.text?.trim();
-    if (!jsonText) {
-        throw new Error("API returned an empty text response.");
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({ error: 'Failed to parse error response from proxy' }));
+      throw new Error(errorBody.error || `Request to API proxy failed with status ${response.status}`);
     }
 
-    const recipeData = JSON.parse(jsonText);
-
+    const recipeData = await response.json();
+    
+    // Basic client-side validation remains a good practice.
     if (!recipeData.recipeName || !Array.isArray(recipeData.ingredients) || !recipeData.servings || !['breakfast', 'lunch', 'dinner'].includes(recipeData.mealType)) {
-        console.error("API response failed validation:", recipeData);
-        throw new Error("Invalid recipe format received from API.");
+        console.error("API proxy response failed validation:", recipeData);
+        throw new Error("Invalid recipe format received from API proxy.");
     }
-
+    
     return recipeData as Omit<Recipe, 'id'>;
+
   } catch (error) {
-    console.error("Error calling Gemini or processing its response:", error);
+    console.error("Error calling API proxy or processing its response:", error);
     // Re-throw the original error to propagate specific messages to the UI
     throw error;
   }
-}
+};
 
 export async function generateRecipe(mealType: MealType, mood?: string): Promise<Omit<Recipe, 'id'>> {
   let prompt = `
@@ -117,7 +56,7 @@ export async function generateRecipe(mealType: MealType, mood?: string): Promise
   
   prompt += `\n\nCRITICAL: The entire response must be a single, valid JSON object that conforms to the provided schema. Do not include any other text, explanations, or markdown formatting like \`\`\`json.`;
   
-  return callGemini(prompt);
+  return callApiProxy(prompt);
 }
 
 export async function adjustRecipe(recipe: Recipe, adjustment: string): Promise<Omit<Recipe, 'id'>> {
@@ -136,5 +75,5 @@ export async function adjustRecipe(recipe: Recipe, adjustment: string): Promise<
       4. CRITICAL: The entire response must be a single, valid JSON object that conforms to the schema. Do not include any other text, explanations, or markdown formatting like \`\`\`json.
   `;
   
-  return callGemini(prompt);
+  return callApiProxy(prompt);
 }
