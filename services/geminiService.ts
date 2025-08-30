@@ -76,42 +76,58 @@ const callGemini = async (prompt: string): Promise<Omit<Recipe, 'id'>> => {
       },
     });
 
-    const jsonText = response.text.trim();
+    const jsonText = response.text?.trim();
+    if (!jsonText) {
+        throw new Error("API returned an empty text response.");
+    }
+
     const recipeData = JSON.parse(jsonText);
 
     if (!recipeData.recipeName || !Array.isArray(recipeData.ingredients) || !recipeData.servings || !['breakfast', 'lunch', 'dinner'].includes(recipeData.mealType)) {
+        console.error("API response failed validation:", recipeData);
         throw new Error("Invalid recipe format received from API.");
     }
 
     return recipeData as Omit<Recipe, 'id'>;
   } catch (error) {
-    console.error("Error calling Gemini API:", error);
-    throw new Error("Could not process request. The API returned an error.");
+    console.error("Error in callGemini:", error);
+    if (error instanceof SyntaxError) {
+        console.error("Failed to parse JSON response from API.");
+    }
+    throw new Error("Could not process request. The API may have returned an error or an invalid recipe format.");
   }
 }
 
 export async function generateRecipe(mealType: MealType, mood?: string): Promise<Omit<Recipe, 'id'>> {
-  let prompt = `Generate a single, creative, low-calorie ${mealType} recipe that is delicious and helpful for weight loss.`;
+  let prompt = `
+    Generate a single, creative, low-calorie recipe suitable for weight loss.
+    The recipe should be simple, delicious, and come from a diverse global cuisine to avoid common flavor profiles.
+    The meal type must be '${mealType}'.
+  `;
+
   if (mood) {
-    prompt += ` The recipe should fit the following theme, ingredients, or mood: "${mood}".`;
+    prompt += ` The recipe must also fit the following theme, ingredients, or mood: "${mood}".`;
   }
-  prompt += ` Ensure the recipe comes from a diverse range of global cuisines to provide variety and avoid repetition of common flavor profiles like 'zesty lemon herb'. The recipe should be simple to make. Provide a calorie estimate for the whole dish.`;
+  
+  prompt += `\n\nYour response MUST be only a JSON object that conforms to the provided schema. Do not include any other text or markdown formatting.`;
   
   return callGemini(prompt);
 }
 
 export async function adjustRecipe(recipe: Recipe, adjustment: string): Promise<Omit<Recipe, 'id'>> {
   const prompt = `
-      Given the following JSON recipe object:
+      You are a recipe modification assistant. Your task is to modify a given JSON recipe based on a user's request and return the complete, updated recipe.
+
+      Original Recipe (JSON format):
       ${JSON.stringify(recipe, null, 2)}
 
-      Please adjust this recipe based on the following user request: "${adjustment}".
+      User's Adjustment Request: "${adjustment}"
 
-      Important:
-      - Modify the recipe name, description, ingredients, and instructions as needed to fulfill the request.
-      - Recalculate the total calories based on the changes.
-      - Keep the 'servings' and 'mealType' the same unless the user explicitly asks to change them.
-      - Your response MUST be only the updated recipe in the exact same JSON format as the input, conforming to the provided schema. Do not include any extra text or explanation.
+      Instructions:
+      1. Modify the recipe (name, description, ingredients, instructions) to fulfill the user's request.
+      2. Recalculate the total 'calories' based on the ingredient changes.
+      3. Keep 'servings' and 'mealType' the same unless explicitly requested.
+      4. Your entire response MUST be ONLY the updated recipe as a single JSON object. Do not wrap it in markdown formatting or add any introductory text or explanations.
   `;
   
   return callGemini(prompt);
