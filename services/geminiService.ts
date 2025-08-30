@@ -45,19 +45,19 @@ const getPromptDescriptionForMode = (mode: CalorieMode): string => {
 export async function generateRecipe(mealType: MealType, calorieMode: CalorieMode, mood?: string): Promise<Omit<Recipe, 'id'>[]> {
   const modeDescription = getPromptDescriptionForMode(calorieMode);
   
-  let prompt = `Generate an array of 3 creative, ${modeDescription} recipes for ${mealType}. The recipes should be simple, delicious, and come from a diverse global cuisine.`;
+  let prompt = `Generate 3 creative, ${modeDescription} recipes for ${mealType}. The recipes should be simple, delicious, and come from a diverse global cuisine.`;
 
   if (mood) {
     prompt += ` The recipes must also fit the following theme, ingredients, or mood: "${mood}".`;
   }
     
-  const recipeData = await callApiProxy<Omit<Recipe, 'id'>[]>(prompt);
+  const recipeData = await callApiProxy<{ recipes: Omit<Recipe, 'id'>[] }>(prompt);
   
-  if (!Array.isArray(recipeData)) {
-      console.error("API proxy response was not an array of recipes:", recipeData);
+  if (!recipeData || !Array.isArray(recipeData.recipes)) {
+      console.error("API proxy response did not contain a 'recipes' array:", recipeData);
       throw new Error("Invalid recipe format received from API proxy.");
   }
-  return recipeData;
+  return recipeData.recipes;
 }
 
 export async function adjustRecipe(recipe: Recipe, adjustment: string): Promise<Omit<Recipe, 'id'>> {

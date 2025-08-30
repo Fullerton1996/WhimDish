@@ -29,7 +29,7 @@ const handler: Handler = async (event) => {
         
         const systemInstruction = isAdjustment
             ? `You are an expert chef who modifies recipes. Return only the adjusted recipe as a single JSON object. The JSON object must strictly follow this structure: ${recipeStructure}. Do not include any other text, just the JSON object.`
-            : `You are an expert chef and nutritionist. Generate an array of 3 creative recipes. The response must be a valid JSON array of objects, where each object strictly follows this structure: ${recipeStructure}. Do not include any other text or markdown, just the JSON array.`;
+            : `You are an expert chef and nutritionist. Generate 3 creative recipes. The response must be a valid JSON object with a single key "recipes" which contains an array of 3 recipe objects. Each recipe object must strictly follow this structure: ${recipeStructure}. Do not include any other text or markdown, just the JSON object.`;
 
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
