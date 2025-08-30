@@ -1,48 +1,20 @@
-import { GoogleGenAI, Type } from '@google/genai';
 
 type Handler = (event: any, context: any) => Promise<{ statusCode: number; body: string; headers?: any; }>;
 
-// The API key is now expected as 'API_KEY' from environment variables.
-const API_KEY = process.env.API_KEY;
-
-const recipeSchema = {
-    type: Type.OBJECT,
-    properties: {
-        recipeName: { type: Type.STRING, description: "The name of the recipe." },
-        description: { type: Type.STRING, description: "A brief, enticing description of the dish." },
-        calories: { type: Type.NUMBER, description: "Total calories for the entire recipe, as a whole number." },
-        servings: { type: Type.INTEGER, description: "The number of servings this recipe makes." },
-        ingredients: {
-            type: Type.ARRAY,
-            description: "A list of ingredients.",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING, description: "Name of the ingredient." },
-                    quantity: { type: Type.NUMBER, description: "Amount of the ingredient." },
-                    unit: { type: Type.STRING, description: "Unit of measurement (e.g., 'cup', 'g', 'tbsp')." },
-                },
-                required: ['name', 'quantity', 'unit'],
-            },
-        },
-        instructions: {
-            type: Type.ARRAY,
-            description: "Step-by-step cooking instructions.",
-            items: { type: Type.STRING },
-        },
-        mealType: { type: Type.STRING, enum: ['breakfast', 'lunch', 'dinner'], description: "The type of meal." },
-    },
-    required: ['recipeName', 'description', 'calories', 'servings', 'ingredients', 'instructions', 'mealType'],
-};
+// The API key is now expected as 'OPENROUTER_API_KEY' from environment variables.
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
     }
 
-    if (!API_KEY) {
-        console.error("Gemini API key is not configured.");
-        return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error: Missing API key.' }) };
+    if (!OPENROUTER_API_KEY) {
+        console.error("OpenRouter API key is not configured.");
+        return { 
+            statusCode: 500, 
+            body: JSON.stringify({ error: "Server configuration error: An API key for the backend service is not set." }) 
+        };
     }
 
     try {
@@ -51,43 +23,52 @@ const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Missing prompt in request body' }) };
         }
 
-        const ai = new GoogleGenAI({ apiKey: API_KEY });
         const isAdjustment = prompt.includes("Original Recipe");
+        
+        const recipeStructure = `{ "recipeName": string, "description": string, "calories": number, "servings": number, "ingredients": [{ "name": string, "quantity": number, "unit": string }], "instructions": string[], "mealType": "breakfast"|"lunch"|"dinner" }`;
+        
+        const systemInstruction = isAdjustment
+            ? `You are an expert chef who modifies recipes. Return only the adjusted recipe as a single JSON object. The JSON object must strictly follow this structure: ${recipeStructure}. Do not include any other text, just the JSON object.`
+            : `You are an expert chef and nutritionist. Generate an array of 3 creative recipes. The response must be a valid JSON array of objects, where each object strictly follows this structure: ${recipeStructure}. Do not include any other text or markdown, just the JSON array.`;
 
-        const systemInstruction = isAdjustment 
-            ? "You are an expert chef who modifies recipes based on user requests. Return only the adjusted recipe in the specified JSON format."
-            : "You are an expert chef and nutritionist who creates delicious recipes. For recipe generation, you must always return an array of exactly 3 recipes in the specified JSON format.";
-
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                systemInstruction,
-                responseMimeType: "application/json",
-                responseSchema: isAdjustment ? recipeSchema : { type: Type.ARRAY, items: recipeSchema },
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "Content-Type": "application/json"
             },
+            body: JSON.stringify({
+                model: "google/gemini-flash-1.5", // A fast and capable model for this use case
+                response_format: { type: "json_object" },
+                messages: [
+                    { role: "system", content: systemInstruction },
+                    { role: "user", content: prompt }
+                ]
+            })
         });
-        
-        const responseText = response.text.trim();
-        
-        // The response from Gemini with responseSchema should be valid JSON, but we'll parse to be sure.
-        let finalJson;
-        try {
-            finalJson = JSON.parse(responseText);
-        } catch (parseError) {
-            console.error("Failed to parse JSON from Gemini response:", parseError);
-            console.error("Original string that failed parsing:", responseText);
-            throw new Error("The recipe data returned by the AI was not in a recognizable JSON format.");
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error("OpenRouter API error:", errorBody);
+            throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
         }
+
+        const data = await response.json();
+        
+        if (!data.choices?.[0]?.message?.content) {
+             throw new Error("Invalid response structure from OpenRouter API.");
+        }
+        
+        const jsonContent = data.choices[0].message.content;
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(finalJson),
+            body: jsonContent,
         };
 
     } catch (error: unknown) {
-        console.error("Error in Gemini proxy function:", error);
+        console.error("Error in gemini proxy function:", error);
         const errorMessage = error instanceof Error ? error.message : 'An internal server error occurred.';
         return { statusCode: 500, body: JSON.stringify({ error: `An internal server error occurred in the proxy function: ${errorMessage}` }) };
     }
