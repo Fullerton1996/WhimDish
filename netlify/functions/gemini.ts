@@ -7,9 +7,8 @@
 type Handler = (event: any, context: any) => Promise<{ statusCode: number; body: string; headers?: any; }>;
 import { GoogleGenAI, Type } from "@google/genai";
 
-// This schema must be kept in sync with the frontend service.
-// It's duplicated here to avoid complex file sharing for this minimal fix.
-const recipeSchema = {
+// This defines the schema for a single recipe object.
+const singleRecipeSchema = {
   type: Type.OBJECT,
   properties: {
     recipeName: {
@@ -53,6 +52,12 @@ const recipeSchema = {
     }
   },
   required: ["recipeName", "description", "calories", "servings", "mealType", "ingredients", "instructions"]
+};
+
+// The API is now expected to return an array of recipe objects.
+const recipeSchema = {
+    type: Type.ARRAY,
+    items: singleRecipeSchema,
 };
 
 // Initialize the AI client once per function instance.

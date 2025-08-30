@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Recipe, MealType } from './types';
-import { generateRecipe, adjustRecipe, MissingApiKeyError } from './services/geminiService';
+import { generateRecipe, adjustRecipe } from './services/geminiService';
 import Header from './components/Header';
 import RecipeCard from './components/RecipeCard';
 import SavedRecipesList from './components/SavedRecipesList';
@@ -9,11 +9,13 @@ import LoadingSpinner from './components/LoadingSpinner';
 import ActionButtons from './components/ActionButtons';
 import MealTypeSelector from './components/MealTypeSelector';
 import MoodPromptInput from './components/MoodPromptInput';
+import ChoiceSelector from './components/ChoiceSelector';
 
 type View = 'discover' | 'saved';
 
 const App: React.FC = () => {
-  const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
+  const [recipeChoices, setRecipeChoices] = useState<Recipe[]>([]);
+  const [currentChoiceIndex, setCurrentChoiceIndex] = useState<number>(0);
   const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAdjusting, setIsAdjusting] = useState<boolean>(false);
@@ -21,12 +23,16 @@ const App: React.FC = () => {
   const [view, setView] = useState<View>('discover');
   const [mealType, setMealType] = useState<MealType>('lunch');
 
+  const currentRecipe = recipeChoices[currentChoiceIndex] || null;
+
   const fetchNewRecipe = useCallback(async (currentMealType: MealType, mood?: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const recipeData = await generateRecipe(currentMealType, mood);
-      setCurrentRecipe({ ...recipeData, id: Date.now().toString() });
+      const recipeDataArray = await generateRecipe(currentMealType, mood);
+      const recipesWithIds = recipeDataArray.map(r => ({ ...r, id: `${Date.now()}-${Math.random()}` }));
+      setRecipeChoices(recipesWithIds);
+      setCurrentChoiceIndex(0);
     } catch (err) {
       if (err instanceof Error) {
         setError(err);
@@ -69,9 +75,16 @@ const App: React.FC = () => {
     setIsAdjusting(true);
     setError(null);
     try {
-        const adjustedRecipeData = await adjustRecipe(currentRecipe, adjustment);
-        // Use the old ID to maintain continuity for the saved state
-        setCurrentRecipe({ ...adjustedRecipeData, id: currentRecipe.id });
+        const adjustedRecipeDataArray = await adjustRecipe(currentRecipe, adjustment);
+        if (adjustedRecipeDataArray.length > 0) {
+            const adjustedRecipeData = adjustedRecipeDataArray[0];
+            const newChoices = [...recipeChoices];
+            // Use the old ID to maintain continuity for the saved state
+            newChoices[currentChoiceIndex] = { ...adjustedRecipeData, id: currentRecipe.id };
+            setRecipeChoices(newChoices);
+        } else {
+            throw new Error("Recipe adjustment did not return a valid recipe.");
+        }
     } catch (err) {
         if (err instanceof Error) {
           setError(new Error(`Failed to adjust recipe: ${err.message}`));
@@ -139,6 +152,13 @@ const App: React.FC = () => {
         <div className="w-full max-w-md flex flex-col items-center">
             <MoodPromptInput onGenerate={handleGenerateFromMood} isLoading={isLoading} />
             <MealTypeSelector selectedMeal={mealType} onSelectMeal={handleMealSelect} />
+            {recipeChoices.length > 1 && (
+                <ChoiceSelector 
+                    count={recipeChoices.length}
+                    currentIndex={currentChoiceIndex}
+                    onSelect={setCurrentChoiceIndex}
+                />
+            )}
             {currentRecipe && (
                 <>
                     <RecipeCard 
