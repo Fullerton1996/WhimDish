@@ -1,7 +1,20 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Recipe, MealType } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Lazily initialize the AI client to avoid crashing on module load if API key is missing
+let ai: GoogleGenAI;
+function getAiClient() {
+    if (!ai) {
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) {
+            // This error will be caught by the calling function and displayed in the UI
+            throw new Error("API_KEY is not configured in the environment.");
+        }
+        ai = new GoogleGenAI({ apiKey });
+    }
+    return ai;
+}
 
 const recipeSchema = {
   type: Type.OBJECT,
@@ -51,7 +64,8 @@ const recipeSchema = {
 
 const callGemini = async (prompt: string): Promise<Omit<Recipe, 'id'>> => {
   try {
-    const response = await ai.models.generateContent({
+    const client = getAiClient();
+    const response = await client.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
       config: {
