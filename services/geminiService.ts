@@ -28,9 +28,9 @@ const callApiProxy = async (prompt: string): Promise<Omit<Recipe, 'id'>[]> => {
 
     const recipeData = await response.json();
     
-    // Basic client-side validation to ensure we received an array.
+    // Client-side validation to ensure we received an array of recipes.
     if (!Array.isArray(recipeData)) {
-        console.error("API proxy response was not an array:", recipeData);
+        console.error("API proxy response was not an array of recipes:", recipeData);
         throw new Error("Invalid recipe format received from API proxy.");
     }
     
@@ -48,7 +48,7 @@ const getPromptDescriptionForMode = (mode: CalorieMode): string => {
     case 'nutritional':
       return 'nutritionally balanced and wholesome recipes. Focus on healthy fats, lean proteins, and complex carbohydrates. Calorie count is secondary to nutritional value.';
     case 'treat-day':
-      return "indulgent and delicious 'treat day' recipes. These do not need to be healthy or low-calorie; focus on flavor and satisfaction.";
+      return "indulgent and delicious 'treat day' recipes. They do not need to be healthy or low-calorie; focus on flavor and satisfaction.";
     case 'low-cal':
     default:
       return 'low-calorie recipes suitable for weight loss.';
@@ -59,23 +59,21 @@ export async function generateRecipe(mealType: MealType, calorieMode: CalorieMod
   const modeDescription = getPromptDescriptionForMode(calorieMode);
   
   let prompt = `
-    Generate an array of 3 distinct, creative, ${modeDescription}
-    Each recipe should be simple, delicious, and come from a diverse global cuisine to avoid common flavor profiles.
+    Generate a distinct array of 3 creative, ${modeDescription}
+    The recipes should be simple, delicious, and come from a diverse global cuisine to avoid common flavor profiles.
     The meal type for all recipes must be '${mealType}'.
   `;
 
   if (mood) {
     prompt += ` The recipes must also fit the following theme, ingredients, or mood: "${mood}".`;
   }
-  
-  prompt += `\n\nCRITICAL: The entire response must be a single, valid JSON array that conforms to the provided schema. Do not include any other text, explanations, or markdown formatting like \`\`\`json.`;
-  
+    
   return callApiProxy(prompt);
 }
 
-export async function adjustRecipe(recipe: Recipe, adjustment: string): Promise<Omit<Recipe, 'id'>[]> {
+export async function adjustRecipe(recipe: Recipe, adjustment: string): Promise<Omit<Recipe, 'id'>> {
   const prompt = `
-      You are a recipe modification assistant. Your task is to modify a given JSON recipe based on a user's request and return the complete, updated recipe.
+      You are a recipe modification assistant. Your task is to modify a given JSON recipe based on a user's request and return the complete, updated recipe as a single JSON object.
 
       Original Recipe (JSON format):
       ${JSON.stringify(recipe, null, 2)}
@@ -86,8 +84,14 @@ export async function adjustRecipe(recipe: Recipe, adjustment: string): Promise<
       1. Modify the recipe (name, description, ingredients, instructions) to fulfill the user's request.
       2. Recalculate the total 'calories' based on the ingredient changes.
       3. Keep 'servings' and 'mealType' the same unless explicitly requested.
-      4. CRITICAL: The entire response must be a single, valid JSON array containing the single, updated recipe object that conforms to the schema. Do not include any other text, explanations, or markdown formatting like \`\`\`json.
   `;
   
-  return callApiProxy(prompt);
+  // The adjust endpoint on the server will return a single object, not an array.
+  // We wrap it in an array to satisfy the type of callApiProxy, then unwrap it.
+  // This is a simplification to reuse the proxy function. A better implementation might have a separate proxy function.
+  const result = await callApiProxy(prompt);
+  if (!result || result.length === 0) {
+      throw new Error("Failed to receive adjusted recipe from the server.");
+  }
+  return result[0];
 }

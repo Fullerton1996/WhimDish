@@ -16,7 +16,7 @@ type View = 'discover' | 'saved';
 
 const App: React.FC = () => {
   const [recipeChoices, setRecipeChoices] = useState<Recipe[]>([]);
-  const [currentChoiceIndex, setCurrentChoiceIndex] = useState<number>(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAdjusting, setIsAdjusting] = useState<boolean>(false);
@@ -25,16 +25,16 @@ const App: React.FC = () => {
   const [mealType, setMealType] = useState<MealType>('lunch');
   const [calorieMode, setCalorieMode] = useState<CalorieMode>('low-cal');
 
-  const currentRecipe = recipeChoices[currentChoiceIndex] || null;
+  const currentRecipe = recipeChoices[currentIndex];
 
   const fetchNewRecipe = useCallback(async (currentMealType: MealType, currentCalorieMode: CalorieMode, mood?: string) => {
     setIsLoading(true);
     setError(null);
+    setCurrentIndex(0);
+    setRecipeChoices([]);
     try {
-      const recipeDataArray = await generateRecipe(currentMealType, currentCalorieMode, mood);
-      const recipesWithIds = recipeDataArray.map(r => ({ ...r, id: `${Date.now()}-${Math.random()}` }));
-      setRecipeChoices(recipesWithIds);
-      setCurrentChoiceIndex(0);
+      const recipesData = await generateRecipe(currentMealType, currentCalorieMode, mood);
+      setRecipeChoices(recipesData.map(recipe => ({ ...recipe, id: `${Date.now()}-${Math.random()}` })));
     } catch (err) {
       if (err instanceof Error) {
         setError(err);
@@ -82,16 +82,10 @@ const App: React.FC = () => {
     setIsAdjusting(true);
     setError(null);
     try {
-        const adjustedRecipeDataArray = await adjustRecipe(currentRecipe, adjustment);
-        if (adjustedRecipeDataArray.length > 0) {
-            const adjustedRecipeData = adjustedRecipeDataArray[0];
-            const newChoices = [...recipeChoices];
-            // Use the old ID to maintain continuity for the saved state
-            newChoices[currentChoiceIndex] = { ...adjustedRecipeData, id: currentRecipe.id };
-            setRecipeChoices(newChoices);
-        } else {
-            throw new Error("Recipe adjustment did not return a valid recipe.");
-        }
+        const adjustedRecipeData = await adjustRecipe(currentRecipe, adjustment);
+        const newChoices = [...recipeChoices];
+        newChoices[currentIndex] = { ...adjustedRecipeData, id: currentRecipe.id };
+        setRecipeChoices(newChoices);
     } catch (err) {
         if (err instanceof Error) {
           setError(new Error(`Failed to adjust recipe: ${err.message}`));
@@ -127,7 +121,7 @@ const App: React.FC = () => {
 
     if (error) {
         // Check for the API key error message coming from the serverless function
-        const isApiKeyError = error.message.includes("API_KEY is not configured");
+        const isApiKeyError = error.message.includes("API key");
 
         if (isApiKeyError) {
             return (
@@ -137,7 +131,7 @@ const App: React.FC = () => {
                         This application can't connect to the recipe service because it's missing a required configuration.
                     </p>
                      <p className="text-sm text-gray-500 mt-4">
-                        (Technical details: The `API_KEY` environment variable is not set.)
+                        (Technical details: An API key for the backend service is not set.)
                     </p>
                 </div>
             );
@@ -160,13 +154,8 @@ const App: React.FC = () => {
             <MoodPromptInput onGenerate={handleGenerateFromMood} isLoading={isLoading} />
             <CalorieModeSelector selectedMode={calorieMode} onSelectMode={handleCalorieModeSelect} />
             <MealTypeSelector selectedMeal={mealType} onSelectMeal={handleMealSelect} />
-            {recipeChoices.length > 1 && (
-                <ChoiceSelector 
-                    count={recipeChoices.length}
-                    currentIndex={currentChoiceIndex}
-                    onSelect={setCurrentChoiceIndex}
-                />
-            )}
+            <ChoiceSelector count={recipeChoices.length} currentIndex={currentIndex} onSelect={setCurrentIndex} />
+
             {currentRecipe && (
                 <>
                     <RecipeCard 
