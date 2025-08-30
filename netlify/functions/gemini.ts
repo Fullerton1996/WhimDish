@@ -93,7 +93,7 @@ const handler: Handler = async (event) => {
                 "X-Title": "WhimDish", // Replace with your site name
             },
             body: JSON.stringify({
-                model: "nousresearch/nous-hermes-2-mixtral-8x7b-dpo", // Upgraded to a more reliable model
+                model: "openrouter/auto", // Use Open Router's auto-routing to find a reliable free model.
                 messages: [
                     { "role": "system", "content": systemInstruction },
                     { "role": "user", "content": prompt }
