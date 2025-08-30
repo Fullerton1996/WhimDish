@@ -33,7 +33,7 @@ const callApiProxy = async <T>(prompt: string): Promise<T> => {
 const getPromptDescriptionForMode = (mode: CalorieMode): string => {
   switch (mode) {
     case 'nutritional':
-      return 'nutritionally balanced and wholesome recipes. Focus on healthy fats, lean proteins, and complex carbohydrates. Calorie count is secondary to nutritional value.';
+      return 'nutritionally balanced and wholesome. Focus on healthy fats, lean proteins, and complex carbohydrates. Calorie count is secondary to nutritional value.';
     case 'treat-day':
       return "indulgent and delicious 'treat day' recipes. They do not need to be healthy or low-calorie; focus on flavor and satisfaction.";
     case 'low-cal':
@@ -45,11 +45,7 @@ const getPromptDescriptionForMode = (mode: CalorieMode): string => {
 export async function generateRecipe(mealType: MealType, calorieMode: CalorieMode, mood?: string): Promise<Omit<Recipe, 'id'>[]> {
   const modeDescription = getPromptDescriptionForMode(calorieMode);
   
-  let prompt = `
-    Generate a distinct array of 3 creative, ${modeDescription}
-    The recipes should be simple, delicious, and come from a diverse global cuisine to avoid common flavor profiles.
-    The meal type for all recipes must be '${mealType}'.
-  `;
+  let prompt = `Generate an array of 3 creative, ${modeDescription} recipes for ${mealType}. The recipes should be simple, delicious, and come from a diverse global cuisine.`;
 
   if (mood) {
     prompt += ` The recipes must also fit the following theme, ingredients, or mood: "${mood}".`;
@@ -66,6 +62,8 @@ export async function generateRecipe(mealType: MealType, calorieMode: CalorieMod
 
 export async function adjustRecipe(recipe: Recipe, adjustment: string): Promise<Omit<Recipe, 'id'>> {
   const prompt = `
+      Please adjust the following recipe based on my request.
+      
       Original Recipe (JSON format):
       ${JSON.stringify(recipe, null, 2)}
 
