@@ -35,37 +35,49 @@ const handler: Handler = async (event) => {
                 "X-Title": "WhimDish",
             },
             body: JSON.stringify({
-                model: "mistralai/mistral-7b-instruct", // A fast and reliable model
+                // Using a model known for high reliability on Open Router to avoid "endpoint not found" errors.
+                model: "mythologic/m-mythomax-l2-13b", 
                 messages: [
                     { role: "system", content: systemInstruction },
                     { role: "user", content: prompt }
                 ],
-                response_format: { "type": "json_object" }
+                // Removed response_format to improve compatibility; parsing is now handled manually.
             }),
         });
 
         if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({ error: 'Failed to parse error response from Open Router' }));
+            const errorBody = await response.text(); // Use .text() for more robust error parsing
             console.error("Open Router Error:", errorBody);
-            const errorMessage = errorBody.error?.message || `Request to Open Router failed with status ${response.status}`;
-            return { statusCode: response.status, body: JSON.stringify({ error: `Failed to fetch from Open Router: ${errorMessage}` }) };
+            try {
+                const parsedError = JSON.parse(errorBody);
+                const errorMessage = parsedError.error?.message || `Request to Open Router failed with status ${response.status}`;
+                return { statusCode: response.status, body: JSON.stringify({ error: `Failed to fetch from Open Router: ${errorMessage}` }) };
+            } catch (e) {
+                 return { statusCode: response.status, body: JSON.stringify({ error: `Failed to fetch from Open Router: ${errorBody}` }) };
+            }
         }
 
         const data = await response.json();
-        
         const jsonContent = data.choices[0]?.message?.content;
         
         if (!jsonContent) {
-            return { statusCode: 500, body: JSON.stringify({ error: "Invalid response structure from Open Router." }) };
+            return { statusCode: 500, body: JSON.stringify({ error: "Invalid response structure from Open Router: no content." }) };
         }
 
-        // The content from the AI is a JSON string. We return it as the body,
-        // and the client's `response.json()` will parse it.
-        return {
-            statusCode: 200,
-            headers: { 'Content-Type': 'application/json' },
-            body: jsonContent,
-        };
+        // Manually parse the JSON content from the model to ensure it's valid before returning.
+        try {
+            JSON.parse(jsonContent); // This will throw if the string is not valid JSON.
+            // The content from the AI is a JSON string. Return it directly for the client to parse.
+            return {
+                statusCode: 200,
+                headers: { 'Content-Type': 'application/json' },
+                body: jsonContent,
+            };
+        } catch (parseError) {
+            console.error("Failed to parse JSON from model response:", parseError);
+            console.error("Model response was:", jsonContent);
+            return { statusCode: 500, body: JSON.stringify({ error: "The model returned an invalid JSON format. Please try again." }) };
+        }
 
     } catch (error: unknown) {
         console.error("Error in Open Router function:", error);
@@ -73,7 +85,7 @@ const handler: Handler = async (event) => {
          if (typeof errorMessage === 'string' && (errorMessage.includes('API key') || errorMessage.includes('authentication'))) {
             return { statusCode: 401, body: JSON.stringify({ error: `The provided API key is invalid or missing. Details: ${errorMessage}` }) };
         }
-        return { statusCode: 500, body: JSON.stringify({ error: `Failed to fetch from Open Router: ${errorMessage}` }) };
+        return { statusCode: 500, body: JSON.stringify({ error: `An internal server error occurred in the proxy function: ${errorMessage}` }) };
     }
 };
 
