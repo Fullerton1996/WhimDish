@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Recipe, MealType } from './types';
+import { Recipe, MealType, CalorieMode } from './types';
 import { generateRecipe, adjustRecipe } from './services/geminiService';
 import Header from './components/Header';
 import RecipeCard from './components/RecipeCard';
@@ -8,6 +8,7 @@ import SavedRecipesList from './components/SavedRecipesList';
 import LoadingSpinner from './components/LoadingSpinner';
 import ActionButtons from './components/ActionButtons';
 import MealTypeSelector from './components/MealTypeSelector';
+import CalorieModeSelector from './components/CalorieModeSelector';
 import MoodPromptInput from './components/MoodPromptInput';
 import ChoiceSelector from './components/ChoiceSelector';
 
@@ -22,14 +23,15 @@ const App: React.FC = () => {
   const [error, setError] = useState<Error | null>(null);
   const [view, setView] = useState<View>('discover');
   const [mealType, setMealType] = useState<MealType>('lunch');
+  const [calorieMode, setCalorieMode] = useState<CalorieMode>('low-cal');
 
   const currentRecipe = recipeChoices[currentChoiceIndex] || null;
 
-  const fetchNewRecipe = useCallback(async (currentMealType: MealType, mood?: string) => {
+  const fetchNewRecipe = useCallback(async (currentMealType: MealType, currentCalorieMode: CalorieMode, mood?: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const recipeDataArray = await generateRecipe(currentMealType, mood);
+      const recipeDataArray = await generateRecipe(currentMealType, currentCalorieMode, mood);
       const recipesWithIds = recipeDataArray.map(r => ({ ...r, id: `${Date.now()}-${Math.random()}` }));
       setRecipeChoices(recipesWithIds);
       setCurrentChoiceIndex(0);
@@ -46,28 +48,33 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchNewRecipe(mealType);
+    fetchNewRecipe(mealType, calorieMode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSave = () => {
     if (currentRecipe && !savedRecipes.some(r => r.id === currentRecipe.id)) {
       setSavedRecipes(prev => [currentRecipe, ...prev]);
-      fetchNewRecipe(mealType);
+      fetchNewRecipe(mealType, calorieMode);
     }
   };
 
   const handleNext = () => {
-    fetchNewRecipe(mealType);
+    fetchNewRecipe(mealType, calorieMode);
   };
 
   const handleMealSelect = (newMealType: MealType) => {
     setMealType(newMealType);
-    fetchNewRecipe(newMealType);
+    fetchNewRecipe(newMealType, calorieMode);
+  };
+
+  const handleCalorieModeSelect = (newMode: CalorieMode) => {
+    setCalorieMode(newMode);
+    fetchNewRecipe(mealType, newMode);
   };
 
   const handleGenerateFromMood = (mood: string) => {
-    fetchNewRecipe(mealType, mood);
+    fetchNewRecipe(mealType, calorieMode, mood);
   };
   
   const handleAdjustRecipe = async (adjustment: string) => {
@@ -139,7 +146,7 @@ const App: React.FC = () => {
             <div className="flex-grow flex flex-col items-center justify-center text-center p-4">
                 <p className="text-red-500 text-lg mb-4">{error.message}</p>
                 <button 
-                    onClick={() => fetchNewRecipe(mealType)}
+                    onClick={() => fetchNewRecipe(mealType, calorieMode)}
                     className="mt-4 px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors"
                 >
                     Try Again
@@ -151,6 +158,7 @@ const App: React.FC = () => {
     return (
         <div className="w-full max-w-md flex flex-col items-center">
             <MoodPromptInput onGenerate={handleGenerateFromMood} isLoading={isLoading} />
+            <CalorieModeSelector selectedMode={calorieMode} onSelectMode={handleCalorieModeSelect} />
             <MealTypeSelector selectedMeal={mealType} onSelectMeal={handleMealSelect} />
             {recipeChoices.length > 1 && (
                 <ChoiceSelector 

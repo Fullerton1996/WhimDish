@@ -1,5 +1,5 @@
 
-import { Recipe, MealType } from '../types';
+import { Recipe, MealType, CalorieMode } from '../types';
 
 // This error class is kept for type consistency in App.tsx, but it will no longer be thrown from this service.
 // The proxy will return a generic error if the API key is missing on the server.
@@ -43,9 +43,23 @@ const callApiProxy = async (prompt: string): Promise<Omit<Recipe, 'id'>[]> => {
   }
 };
 
-export async function generateRecipe(mealType: MealType, mood?: string): Promise<Omit<Recipe, 'id'>[]> {
+const getPromptDescriptionForMode = (mode: CalorieMode): string => {
+  switch (mode) {
+    case 'nutritional':
+      return 'nutritionally balanced and wholesome recipes. Focus on healthy fats, lean proteins, and complex carbohydrates. Calorie count is secondary to nutritional value.';
+    case 'treat-day':
+      return "indulgent and delicious 'treat day' recipes. These do not need to be healthy or low-calorie; focus on flavor and satisfaction.";
+    case 'low-cal':
+    default:
+      return 'low-calorie recipes suitable for weight loss.';
+  }
+}
+
+export async function generateRecipe(mealType: MealType, calorieMode: CalorieMode, mood?: string): Promise<Omit<Recipe, 'id'>[]> {
+  const modeDescription = getPromptDescriptionForMode(calorieMode);
+  
   let prompt = `
-    Generate an array of 3 distinct, creative, low-calorie recipes suitable for weight loss.
+    Generate an array of 3 distinct, creative, ${modeDescription}
     Each recipe should be simple, delicious, and come from a diverse global cuisine to avoid common flavor profiles.
     The meal type for all recipes must be '${mealType}'.
   `;

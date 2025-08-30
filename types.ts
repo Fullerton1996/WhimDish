@@ -1,5 +1,7 @@
 export type MealType = 'breakfast' | 'lunch' | 'dinner';
 
+export type CalorieMode = 'low-cal' | 'nutritional' | 'treat-day';
+
 export interface Ingredient {
   name: string;
   quantity: number;
