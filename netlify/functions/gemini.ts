@@ -24,7 +24,7 @@ const handler: Handler = async (event) => {
         const isAdjustment = prompt.includes("Original Recipe");
 
         const typeSchema = `
-          // IMPORTANT: Your entire response must be ONLY the raw JSON, with no markdown, comments, or other text.
+          // Your entire response must be ONLY the raw JSON, with no markdown, comments, or other text.
           interface Ingredient {
             name: string;
             quantity: number;
@@ -43,9 +43,47 @@ const handler: Handler = async (event) => {
         `;
 
         const systemInstruction = isAdjustment
-          ? `You are a recipe modification API. You MUST return a single, valid JSON object that perfectly matches the 'Recipe' interface. Do NOT add any text before or after the JSON object. ${typeSchema} Your entire response must be the raw JSON object.`
-          : `You are a recipe generation API. You MUST return a single, valid JSON array containing exactly 3 'Recipe' objects. Do NOT add any text before or after the JSON array. ${typeSchema} Your entire response must be the raw JSON array.`;
-
+          ? `You are a recipe modification API. You MUST return a single, valid JSON object that perfectly matches the 'Recipe' interface. Do NOT add any text, markdown, or comments before or after the JSON object. Your entire response must be only the raw JSON object.
+              ${typeSchema}
+              Example Response:
+              {
+                "recipeName": "Spicy Tofu Stir-fry",
+                "description": "A quick and spicy stir-fry, perfect for a weeknight dinner.",
+                "calories": 450,
+                "servings": 2,
+                "ingredients": [
+                  { "name": "Tofu", "quantity": 1, "unit": "block" },
+                  { "name": "Broccoli Florets", "quantity": 1, "unit": "cup" },
+                  { "name": "Soy Sauce", "quantity": 2, "unit": "tablespoons" }
+                ],
+                "instructions": [
+                  "Press and cube the tofu.",
+                  "Stir-fry the tofu until golden.",
+                  "Add broccoli and soy sauce, and cook for 5 more minutes."
+                ],
+                "mealType": "dinner"
+              }`
+          : `You are a recipe generation API. You MUST return a single, valid JSON array containing exactly 3 'Recipe' objects. Do NOT add any text, markdown, or comments before or after the JSON array. Your entire response must be only the raw JSON array.
+              ${typeSchema}
+              Example Response Format (you must provide 3 recipes in the array):
+              [
+                {
+                  "recipeName": "Classic Oatmeal",
+                  "description": "A warm and comforting bowl of oatmeal to start your day.",
+                  "calories": 150,
+                  "servings": 1,
+                  "ingredients": [
+                    { "name": "Rolled Oats", "quantity": 0.5, "unit": "cup" },
+                    { "name": "Water", "quantity": 1, "unit": "cup" }
+                  ],
+                  "instructions": [
+                    "Bring water to a boil.",
+                    "Add oats and cook for 5 minutes."
+                  ],
+                  "mealType": "breakfast"
+                }
+              ]`;
+              
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -55,12 +93,11 @@ const handler: Handler = async (event) => {
                 "X-Title": "WhimDish", // Replace with your site name
             },
             body: JSON.stringify({
-                model: "mistralai/mistral-7b-instruct",
+                model: "nousresearch/nous-hermes-2-mixtral-8x7b-dpo", // Upgraded to a more reliable model
                 messages: [
                     { "role": "system", "content": systemInstruction },
                     { "role": "user", "content": prompt }
                 ],
-                // Removed response_format as it was causing conflicts and was not reliable.
             }),
         });
 
@@ -73,12 +110,11 @@ const handler: Handler = async (event) => {
         const jsonResponse = await response.json();
         const content = jsonResponse.choices[0].message.content;
 
-        // Models can be unreliable and wrap JSON in markdown or add conversational text.
         // This regex will find the first JSON object or array in the response string.
         const jsonMatch = content.match(/(\[.*\]|\{.*\})/s);
 
         if (!jsonMatch) {
-            console.error("Malformed response from AI:", content);
+            console.error("Malformed response from AI: No JSON object/array found.", content);
             throw new Error("The recipe data returned by the AI was not in a recognizable format. Please try again.");
         }
 
