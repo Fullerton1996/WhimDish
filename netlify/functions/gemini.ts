@@ -23,8 +23,8 @@ const handler: Handler = async (event) => {
 
         const isAdjustment = prompt.includes("Original Recipe");
 
-        // A strict TypeScript interface definition to guide the model.
         const typeSchema = `
+          // IMPORTANT: Your entire response must be ONLY the raw JSON, with no markdown, comments, or other text.
           interface Ingredient {
             name: string;
             quantity: number;
@@ -37,14 +37,14 @@ const handler: Handler = async (event) => {
             calories: number;
             servings: number;
             ingredients: Ingredient[];
-            instructions: string[];
+            instructions: string[]; // Array of step-by-step instructions.
             mealType: 'breakfast' | 'lunch' | 'dinner';
           }
         `;
 
         const systemInstruction = isAdjustment
-          ? `You are a recipe modification assistant. Modify the given recipe based on the user's request. Return ONLY the complete, updated recipe as a single valid JSON object. ${typeSchema} Your output must be a single Recipe object.`
-          : `You are a recipe generation API. Return a valid JSON array of 3 distinct recipe objects based on the user's request. ${typeSchema} Your output must be an array of 3 Recipe objects.`;
+          ? `You are a recipe modification API. You MUST return a single, valid JSON object that perfectly matches the 'Recipe' interface. Do NOT add any text before or after the JSON object. ${typeSchema} Your entire response must be the raw JSON object.`
+          : `You are a recipe generation API. You MUST return a single, valid JSON array containing exactly 3 'Recipe' objects. Do NOT add any text before or after the JSON array. ${typeSchema} Your entire response must be the raw JSON array.`;
 
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
@@ -60,7 +60,7 @@ const handler: Handler = async (event) => {
                     { "role": "system", "content": systemInstruction },
                     { "role": "user", "content": prompt }
                 ],
-                response_format: { "type": "json_object" }
+                // Removed response_format as it was causing conflicts and was not reliable.
             }),
         });
 
@@ -73,32 +73,30 @@ const handler: Handler = async (event) => {
         const jsonResponse = await response.json();
         const content = jsonResponse.choices[0].message.content;
 
-        // The model returns a string that is JSON. We need to parse it.
-        // And because we requested a json_object, the top-level will be an object.
-        // The actual content we want may be inside a property. Let's find it.
-        const parsedContent = JSON.parse(content);
+        // Models can be unreliable and wrap JSON in markdown or add conversational text.
+        // This regex will find the first JSON object or array in the response string.
+        const jsonMatch = content.match(/(\[.*\]|\{.*\})/s);
 
-        // Models that are forced to JSON sometimes wrap the result in a key, e.g., {"recipes": [...]}.
-        // We will extract the first array or object we find.
-        let finalJson;
-        if (typeof parsedContent === 'object' && parsedContent !== null) {
-            const values = Object.values(parsedContent);
-            const expectedType = isAdjustment ? 'object' : 'array';
-            const foundValue = values.find(v => (expectedType === 'array' ? Array.isArray(v) : typeof v === 'object' && !Array.isArray(v)));
-            finalJson = foundValue || parsedContent; // Fallback to the parsed content itself
-        } else {
-            finalJson = parsedContent;
+        if (!jsonMatch) {
+            console.error("Malformed response from AI:", content);
+            throw new Error("The recipe data returned by the AI was not in a recognizable format. Please try again.");
         }
 
-        const finalBody = JSON.stringify(finalJson);
-        
-        // Final validation to ensure we're sending valid JSON to the client.
-        JSON.parse(finalBody);
+        const jsonString = jsonMatch[0];
+        let finalJson;
+
+        try {
+            finalJson = JSON.parse(jsonString);
+        } catch (parseError) {
+            console.error("Failed to parse JSON from AI response:", parseError);
+            console.error("Original string that failed parsing:", jsonString);
+            throw new Error("There was an issue decoding the recipe data from the AI. Please try again.");
+        }
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: finalBody,
+            body: JSON.stringify(finalJson),
         };
 
     } catch (error: unknown) {
