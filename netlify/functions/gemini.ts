@@ -51,7 +51,7 @@ const handler: Handler = async (event) => {
         }
 
         const openRouterPayload = {
-            model: "mistralai/mistral-7b-instruct-v0.2", // One of the cheapest and most efficient models
+            model: "nousresearch/nous-hermes-2-mistral-7b-dpo", // A valid, cheap, and efficient model
             messages: [
                 { role: "system", content: SYSTEM_PROMPT },
                 { role: "user", content: prompt }
