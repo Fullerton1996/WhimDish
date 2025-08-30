@@ -9,7 +9,7 @@ interface RecipeCardProps {
 }
 
 const formatQuantity = (quantity: number): string => {
-  if (quantity === 0) return "0";
+  if (isNaN(quantity) || quantity === 0) return "0";
   if (quantity < 0.1) return quantity.toFixed(2);
   if (quantity < 1) {
     if (Math.abs(quantity - 0.25) < 0.01) return "1/4";
@@ -22,7 +22,7 @@ const formatQuantity = (quantity: number): string => {
 };
 
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAdjust, isAdjusting }) => {
-  const [servings, setServings] = useState(recipe.servings);
+  const [servings, setServings] = useState(recipe.servings || 1);
   const [adjustment, setAdjustment] = useState('');
 
   const handleAdjustClick = () => {
@@ -32,6 +32,9 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAdjust, isAdjusting }
     }
   };
 
+  const caloriesPerServing = recipe.servings > 0 ? recipe.calories / recipe.servings : 0;
+  const displayCalories = Math.round(caloriesPerServing * servings);
+
   return (
     <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-6 md:p-8 space-y-6 flex-grow flex flex-col overflow-hidden animate-fade-in">
       <div className="text-center border-b border-gray-200 pb-4 pt-4 relative">
@@ -39,7 +42,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAdjust, isAdjusting }
           {recipe.mealType}
         </span>
         <h2 className="text-2xl font-bold text-gray-800">{recipe.recipeName}</h2>
-        <p className="text-sm text-gray-500 mt-1">{Math.round(recipe.calories / recipe.servings * servings)} calories for {servings} serving(s)</p>
+        <p className="text-sm text-gray-500 mt-1">{displayCalories} calories for {servings} serving(s)</p>
       </div>
       
       <div className="overflow-y-auto pr-2 space-y-6 flex-grow">
@@ -52,7 +55,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAdjust, isAdjusting }
             </div>
             <ul className="list-disc list-inside space-y-1 text-gray-600">
               {recipe.ingredients.map((ingredient, index) => {
-                const adjustedQuantity = (ingredient.quantity / recipe.servings) * servings;
+                const adjustedQuantity = recipe.servings > 0 ? (ingredient.quantity / recipe.servings) * servings : 0;
                 return (
                     <li key={index}>
                         {formatQuantity(adjustedQuantity)} {ingredient.unit} {ingredient.name}
@@ -90,7 +93,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAdjust, isAdjusting }
                 className="px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center min-w-[100px]"
             >
                 {isAdjusting ? (
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>

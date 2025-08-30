@@ -22,9 +22,29 @@ const handler: Handler = async (event) => {
 
         const isAdjustment = prompt.includes("Original Recipe");
 
+        const schema = `
+          The JSON output MUST conform to the following TypeScript interfaces:
+
+          interface Ingredient {
+            name: string; // e.g., "all-purpose flour"
+            quantity: number; // e.g., 1.5
+            unit: string; // e.g., "cup" or "grams"
+          }
+
+          interface Recipe {
+            recipeName: string;
+            description: string;
+            calories: number; // Total calories for the ENTIRE recipe (all servings)
+            servings: number; // The number of servings the recipe yields
+            ingredients: Ingredient[];
+            instructions: string[]; // An array of steps
+            mealType: 'breakfast' | 'lunch' | 'dinner';
+          }
+        `;
+
         const systemInstruction = isAdjustment
-            ? "You are a recipe modification assistant. Your task is to modify a given JSON recipe based on a user's request and return only the complete, updated recipe as a single valid JSON object. Do not return an array or any wrapping text, markdown, or explanations. Only the JSON object is allowed."
-            : "You are a recipe generation API. Your sole purpose is to return a valid JSON array of 3 distinct recipe objects based on the user's request. Do not include any text, explanations, or markdown formatting outside of the JSON array itself. The response must be only the JSON array.";
+            ? `You are a recipe modification assistant. Your task is to modify a given JSON recipe based on a user's request. Return only the complete, updated recipe as a single valid JSON object. Do not return an array or any wrapping text, markdown, or explanations. Only the JSON object is allowed. ${schema}`
+            : `You are a recipe generation API. Your sole purpose is to return a valid JSON array of 3 distinct recipe objects based on the user's request. Do not include any text, explanations, or markdown formatting outside of the JSON array itself. The response must be only the JSON array. Each object in the array must conform to the schema. ${schema}`;
         
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
@@ -35,18 +55,16 @@ const handler: Handler = async (event) => {
                 "X-Title": "WhimDish",
             },
             body: JSON.stringify({
-                // Using a model known for high reliability on Open Router to avoid "endpoint not found" errors.
                 model: "mythologic/m-mythomax-l2-13b", 
                 messages: [
                     { role: "system", content: systemInstruction },
                     { role: "user", content: prompt }
                 ],
-                // Removed response_format to improve compatibility; parsing is now handled manually.
             }),
         });
 
         if (!response.ok) {
-            const errorBody = await response.text(); // Use .text() for more robust error parsing
+            const errorBody = await response.text();
             console.error("Open Router Error:", errorBody);
             try {
                 const parsedError = JSON.parse(errorBody);
@@ -64,10 +82,8 @@ const handler: Handler = async (event) => {
             return { statusCode: 500, body: JSON.stringify({ error: "Invalid response structure from Open Router: no content." }) };
         }
 
-        // Manually parse the JSON content from the model to ensure it's valid before returning.
         try {
-            JSON.parse(jsonContent); // This will throw if the string is not valid JSON.
-            // The content from the AI is a JSON string. Return it directly for the client to parse.
+            JSON.parse(jsonContent);
             return {
                 statusCode: 200,
                 headers: { 'Content-Type': 'application/json' },
