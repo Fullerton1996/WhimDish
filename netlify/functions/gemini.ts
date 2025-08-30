@@ -51,7 +51,7 @@ const handler: Handler = async (event) => {
         }
 
         const openRouterPayload = {
-            model: "nousresearch/nous-hermes-2-mistral-7b-dpo", // A valid, cheap, and efficient model
+            model: "google/gemma-7b-it", // A popular, stable, and cost-effective model.
             messages: [
                 { role: "system", content: SYSTEM_PROMPT },
                 { role: "user", content: prompt }
