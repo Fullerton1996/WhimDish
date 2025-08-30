@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Recipe, MealType } from './types';
-import { generateRecipe, adjustRecipe } from './services/geminiService';
+import { generateRecipe, adjustRecipe, MissingApiKeyError } from './services/geminiService';
 import Header from './components/Header';
 import RecipeCard from './components/RecipeCard';
 import SavedRecipesList from './components/SavedRecipesList';
@@ -16,7 +17,7 @@ const App: React.FC = () => {
   const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAdjusting, setIsAdjusting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const [view, setView] = useState<View>('discover');
   const [mealType, setMealType] = useState<MealType>('lunch');
 
@@ -28,9 +29,9 @@ const App: React.FC = () => {
       setCurrentRecipe({ ...recipeData, id: Date.now().toString() });
     } catch (err) {
       if (err instanceof Error) {
-        setError(err.message);
+        setError(err);
       } else {
-        setError('An unknown error occurred. Please try again.');
+        setError(new Error('An unknown error occurred. Please try again.'));
       }
       console.error(err);
     } finally {
@@ -73,9 +74,9 @@ const App: React.FC = () => {
         setCurrentRecipe({ ...adjustedRecipeData, id: currentRecipe.id });
     } catch (err) {
         if (err instanceof Error) {
-          setError(`Failed to adjust recipe: ${err.message}`);
+          setError(new Error(`Failed to adjust recipe: ${err.message}`));
         } else {
-          setError('An unknown error occurred while adjusting the recipe.');
+          setError(new Error('An unknown error occurred while adjusting the recipe.'));
         }
         console.error(err);
     } finally {
@@ -91,9 +92,13 @@ const App: React.FC = () => {
     );
   };
   
+  const handleDeleteRecipe = (id: string) => {
+    setSavedRecipes(prev => prev.filter(recipe => recipe.id !== id));
+  };
+  
   const renderContent = () => {
     if (view === 'saved') {
-      return <SavedRecipesList savedRecipes={savedRecipes} onUpdateRecipe={handleUpdateSavedRecipe} />;
+      return <SavedRecipesList savedRecipes={savedRecipes} onUpdateRecipe={handleUpdateSavedRecipe} onDeleteRecipe={handleDeleteRecipe} />;
     }
 
     if (isLoading) {
@@ -101,9 +106,22 @@ const App: React.FC = () => {
     }
 
     if (error) {
+        if (error instanceof MissingApiKeyError) {
+            return (
+                <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-red-50 rounded-lg max-w-lg mx-auto shadow-sm">
+                    <h2 className="text-2xl font-bold text-red-700 mb-2">Configuration Error</h2>
+                    <p className="text-gray-700">
+                        This application can't connect to the recipe service because it's missing a required configuration.
+                    </p>
+                     <p className="text-sm text-gray-500 mt-4">
+                        (Technical details: The `API_KEY` environment variable is not set.)
+                    </p>
+                </div>
+            );
+        }
         return (
             <div className="flex-grow flex flex-col items-center justify-center text-center p-4">
-                <p className="text-red-500 text-lg">{error}</p>
+                <p className="text-red-500 text-lg mb-4">{error.message}</p>
                 <button 
                     onClick={() => fetchNewRecipe(mealType)}
                     className="mt-4 px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors"

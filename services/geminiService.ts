@@ -2,6 +2,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Recipe, MealType } from '../types';
 
+// Custom error for missing API key, allowing for specific UI handling.
+export class MissingApiKeyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MissingApiKeyError";
+  }
+}
+
 // Lazily initialize the AI client to avoid crashing on module load if API key is missing
 let ai: GoogleGenAI;
 function getAiClient() {
@@ -9,7 +17,7 @@ function getAiClient() {
         const apiKey = process.env.API_KEY;
         if (!apiKey) {
             // This error will be caught by the calling function and displayed in the UI
-            throw new Error("API_KEY is not configured in the environment.");
+            throw new MissingApiKeyError("API_KEY is not configured in the environment.");
         }
         ai = new GoogleGenAI({ apiKey });
     }

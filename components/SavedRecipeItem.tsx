@@ -1,10 +1,13 @@
+
 import React, { useState, useRef } from 'react';
 import { Recipe } from '../types';
 import { ServingAdjuster } from './ServingAdjuster';
+import { TrashIcon } from './icons/TrashIcon';
 
 interface SavedRecipeItemProps {
   recipe: Recipe;
   onUpdateRecipe: (id: string, updatedData: Partial<Omit<Recipe, 'id'>>) => void;
+  onDelete: () => void;
 }
 
 const formatQuantity = (quantity: number): string => {
@@ -20,9 +23,16 @@ const formatQuantity = (quantity: number): string => {
   return Number(quantity.toFixed(1)).toString();
 };
 
-export const SavedRecipeItem: React.FC<SavedRecipeItemProps> = ({ recipe, onUpdateRecipe }) => {
+export const SavedRecipeItem: React.FC<SavedRecipeItemProps> = ({ recipe, onUpdateRecipe, onDelete }) => {
   const [servings, setServings] = useState(recipe.servings);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent details from toggling
+    if (window.confirm(`Are you sure you want to delete "${recipe.recipeName}"?`)) {
+      onDelete();
+    }
+  };
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -36,10 +46,18 @@ export const SavedRecipeItem: React.FC<SavedRecipeItemProps> = ({ recipe, onUpda
   };
 
   return (
-    <details className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer">
+    <details className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer group">
       <summary className="font-semibold text-lg text-gray-700 list-none flex justify-between items-center">
         <span>{recipe.recipeName}</span>
-        <span className="text-sm font-normal text-gray-500">{recipe.calories} calories</span>
+        <div className="flex items-center space-x-4">
+            <span className="text-sm font-normal text-gray-500 hidden sm:inline">{Math.round(recipe.calories / recipe.servings)} cal/serving</span>
+            <button
+                onClick={handleDelete}
+                className="p-1.5 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all"
+                aria-label={`Delete ${recipe.recipeName}`}>
+                <TrashIcon />
+            </button>
+        </div>
       </summary>
       <div className="mt-4 pt-4 border-t border-gray-200">
         
