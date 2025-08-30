@@ -103,7 +103,6 @@ const handler: Handler = async (event, context) => {
                 responseMimeType: "application/json",
                 responseSchema: recipeSchema,
                 temperature: 0.9,
-                thinkingConfig: { thinkingBudget: 0 },
             },
         });
 
